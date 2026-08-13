@@ -1,35 +1,89 @@
 # Chest X-Ray Pneumonia Classification
 
-A machine learning and deep learning project for **pneumonia detection from chest X-ray images**, comparing classical feature-based methods with convolutional neural networks and transfer learning.
+Detecting pneumonia from chest X-rays by comparing handcrafted image features with classical machine learning, a custom CNN, and transfer learning with EfficientNetB0.
 
-The project explores both **binary classification** (Normal vs. Pneumonia) and an extended **three-class classification** task distinguishing Normal, Bacterial Pneumonia, and Viral Pneumonia.
-
-> MSc coursework — Image Analysis and Processing, National and Kapodistrian University of Athens, 2026.
+The project also includes a three-class experiment separating bacterial and viral pneumonia.
 
 ---
 
-## Overview
+## Results
 
-Pneumonia diagnosis from chest X-ray images is an important medical image classification problem. This project investigates different machine learning approaches for automatically distinguishing healthy chest X-rays from pneumonia cases.
+All models were evaluated on the same held-out test set of 624 images.
 
-The complete pipeline includes:
+| Model | Accuracy | F1 Normal | F1 Pneumonia | Macro F1 |
+|---|---:|---:|---:|---:|
+| Random Forest (HOG + GLCM) | 70.03% | 0.36 | 0.80 | 0.58 |
+| Linear SVM (HOG + GLCM) | 73.88% | 0.48 | 0.83 | 0.65 |
+| Custom CNN | 78.85% | 0.68 | 0.84 | 0.76 |
+| EfficientNetB0 — frozen | 85.74% | 0.79 | 0.89 | 0.84 |
+| EfficientNetB0 — fine-tuned | **87.18%** | **0.80** | **0.90** | **0.85** |
 
-- dataset exploration and class distribution analysis,
-- image preprocessing and contrast enhancement,
-- handcrafted feature extraction using **HOG** and **GLCM**,
-- classical machine learning with **Random Forest** and **Linear SVM**,
-- a custom **Convolutional Neural Network (CNN)**,
-- transfer learning with **EfficientNetB0**,
-- fine-tuning of the pretrained network,
-- and an additional three-class pneumonia classification experiment.
+The ranking is fairly clear, but the distribution of errors is more interesting than accuracy alone.
+
+### Classical ML
+
+Both classical models strongly over-predict pneumonia.
+
+Random Forest reached 98% recall on Pneumonia while correctly classifying only 53 of 234 Normal X-rays. Linear SVM detected 386 of 390 pneumonia cases but still recognized only about a third of the Normal images.
+
+Both models used `class_weight="balanced"`, so class weighting alone was not enough to solve the problem.
+
+One likely contributing factor is the size of the handcrafted feature space. HOG + GLCM produces 26,248 features per image against roughly 4.4k training samples, giving substantially more features than training examples.
+
+This high-dimensional feature space likely contributes to the limitations of the classical approach.
+
+### Deep learning
+
+Moving from handcrafted to learned features improved both overall accuracy and the balance between classes.
+
+The custom CNN increased Normal F1 from 0.48 with Linear SVM to 0.68. EfficientNetB0 improved it further to 0.79 with the frozen backbone and 0.80 after fine-tuning.
+
+Fine-tuning helped, although less than expected. Unfreezing the top 50 layers at a learning rate of `5e-6` improved test accuracy by about 1.4 percentage points compared with the frozen model.
+
+Most of the improvement therefore came from using the pretrained ImageNet features rather than from extensive fine-tuning.
+
+### Where the final model still fails
+
+The fine-tuned model misses 11 of 390 pneumonia cases, corresponding to approximately 97% recall, but misclassifies 69 of 234 Normal X-rays.
+
+This shows that the final classifier still has a noticeable bias toward predicting pneumonia.
+
+Validation accuracy exceeded 92% during training while test accuracy reached 87.18%. The validation-test gap may partly reflect distribution differences between the predefined dataset splits, so validation performance should not be interpreted as a direct estimate of test performance.
+
+---
+
+## Three-Class Experiment: Normal / Bacterial / Viral
+
+The `PNEUMONIA` folder encodes the pneumonia subtype in the filename, for example:
+
+```text
+person1_bacteria_1.jpeg
+person1_virus_6.jpeg
+```
+
+This makes it possible to recover bacterial and viral labels without additional annotation.
+
+The fine-tuned EfficientNetB0 achieved **80.61% test accuracy** on the three-class problem.
+
+| Class | Precision | Recall | F1 |
+|---|---:|---:|---:|
+| Bacterial Pneumonia | 0.80 | 0.87 | 0.84 |
+| Normal | 0.82 | 0.82 | 0.82 |
+| Viral Pneumonia | 0.78 | 0.68 | 0.73 |
+
+Most of the remaining errors occur between the two pneumonia subtypes, particularly viral cases classified as bacterial.
+
+Normal images remain more clearly separable, while distinguishing bacterial from viral pneumonia is the harder part of the task.
+
+Fine-tuning produced only a small improvement on this experiment, with validation accuracy remaining around 72% before and after unfreezing. This suggests that the pretrained features were already capturing much of the useful visual information available for this task.
 
 ---
 
 ## Dataset
 
-The project uses the **Chest X-Ray Images (Pneumonia)** dataset from Kaggle.
+The project uses the Kaggle **Chest X-Ray Images (Pneumonia)** dataset containing 5,856 images.
 
-The original dataset contains **5,856 chest X-ray images**:
+Original dataset split:
 
 | Split | Normal | Pneumonia | Total |
 |---|---:|---:|---:|
@@ -37,178 +91,205 @@ The original dataset contains **5,856 chest X-ray images**:
 | Validation | 8 | 8 | 16 |
 | Test | 234 | 390 | 624 |
 
-The original validation set contains only 16 images, making it too small for reliable model evaluation.
+The provided validation set contains only 16 images, making it too small for reliable model selection. It also contains no viral pneumonia cases, so it cannot support the three-class experiment.
 
-To address this, the original training and validation sets were combined and a new **stratified 85/15 split** was created:
+For this reason, train and validation were combined and re-split using stratification on the three-class labels:
 
-- **Training:** 4,447 images
+- **Train:** 4,447 images
 - **Validation:** 785 images
-- **Testing:** 624 images
+- **Test:** 624 images, kept untouched
 
-The dataset also contains information that allows pneumonia cases to be separated into **Bacterial Pneumonia** and **Viral Pneumonia**, enabling an additional three-class experiment.
-
----
-
-## Image Preprocessing
-
-Chest X-ray images are converted to grayscale and resized to **224 × 224 pixels**.
-
-The preprocessing pipeline includes:
-
-- **Gaussian filtering** for noise reduction
-- **CLAHE (Contrast Limited Adaptive Histogram Equalization)** for local contrast enhancement
-- image normalization
-- conservative data augmentation for deep learning models
-
-These operations improve local contrast and make anatomical structures more distinguishable while preserving the overall characteristics of the X-ray images.
+Initial pixel-intensity analysis showed substantial overlap between Normal and Pneumonia images, suggesting that intensity alone would not provide enough information for classification and motivating the use of spatial and textural features.
 
 ---
 
-## Classical Machine Learning
+## Methodology
 
-Two handcrafted feature representations are extracted from the preprocessed images:
+### Preprocessing
 
-### Histogram of Oriented Gradients (HOG)
+The same basic preprocessing pipeline was used across the experiments:
 
-HOG captures structural information such as edges, contours, and local gradient orientations.
+```text
+Grayscale
+    ↓
+Resize to 224×224
+    ↓
+Gaussian Blur (3×3)
+    ↓
+CLAHE
+```
 
-### Gray-Level Co-occurrence Matrix (GLCM)
+CLAHE uses a `clipLimit` of 2.0 with 8×8 tiles.
 
-GLCM captures texture information using statistical properties including contrast, dissimilarity, homogeneity, energy, correlation, and ASM.
-
-The combined representation produces **26,248 features per image**.
-
-Two classifiers are evaluated:
-
-- **Random Forest**
-- **Linear Support Vector Machine (SVM)**
-
-Feature standardization and class weighting are used where appropriate to improve training and account for class imbalance.
+It was preferred over global histogram equalization because chest X-rays can have substantial local exposure differences. Local contrast enhancement helps emphasize structures within the lung fields without applying the same transformation uniformly across the entire image.
 
 ---
 
-## Deep Learning
+### Handcrafted Features
+
+Two types of features were extracted for the classical ML models.
+
+**HOG (Histogram of Oriented Gradients)** captures edges and structural information:
+
+- 9 orientations
+- 8×8 pixels per cell
+- 2×2 cells per block
+- L2-Hys normalization
+
+**GLCM (Gray-Level Co-occurrence Matrix)** captures texture information using:
+
+- contrast
+- dissimilarity
+- homogeneity
+- energy
+- correlation
+- ASM
+
+Combining HOG and GLCM provides both structural and textural information from the X-rays.
+
+Features were standardized using `StandardScaler`, fitted only on the training data.
+
+---
 
 ### Custom CNN
 
-A custom Convolutional Neural Network is trained directly on the chest X-ray images.
+The custom CNN uses three convolutional blocks:
 
-The model learns hierarchical image representations automatically and serves as a deep learning baseline against the handcrafted HOG + GLCM approaches.
+```text
+Conv2D (32)
+    ↓
+MaxPooling
+    ↓
+Conv2D (64)
+    ↓
+MaxPooling
+    ↓
+Conv2D (128)
+    ↓
+MaxPooling
+    ↓
+GlobalAveragePooling
+    ↓
+Dense (128)
+    ↓
+Dropout (0.4)
+    ↓
+Output
+```
+
+Global Average Pooling was used instead of flattening the complete feature maps to keep the number of parameters manageable.
+
+The model was trained with Adam using a learning rate of `1e-4`.
+
+The architecture was intentionally kept relatively small, since the goal was to compare learned representations with the handcrafted HOG + GLCM pipeline rather than build a heavily optimized CNN.
+
+---
 
 ### EfficientNetB0
 
-Transfer learning is performed using **EfficientNetB0** pretrained on ImageNet.
+Transfer learning was performed using EfficientNetB0 with ImageNet pretrained weights.
 
-Training is performed in two stages:
+Training was divided into two phases.
 
-1. **Feature extraction** with the EfficientNetB0 backbone frozen
-2. **Fine-tuning** of the upper layers using a lower learning rate
+**Phase 1 — Frozen backbone**
 
-This allows the network to first leverage pretrained visual representations and then adapt them more specifically to chest X-ray classification.
+- EfficientNetB0 backbone frozen
+- only the classification head trained
+- learning rate: `1e-4`
+- up to 10 epochs
 
----
+**Phase 2 — Fine-tuning**
 
-## Results
+- top 50 layers unfrozen
+- learning rate: `5e-6`
+- early stopping with `patience=3`
 
-### Binary Classification
+A small learning rate was used during fine-tuning to avoid making large updates to the pretrained weights on a relatively small dataset.
 
-| Model | Accuracy | F1 Normal | F1 Pneumonia | Macro F1 |
-|---|---:|---:|---:|---:|
-| Random Forest | 70.03% | 0.36 | 0.80 | 0.58 |
-| Linear SVM | 73.88% | 0.48 | 0.83 | 0.65 |
-| Custom CNN | 78.85% | 0.68 | 0.84 | 0.76 |
-| EfficientNetB0 — Frozen | 85.74% | 0.79 | 0.89 | 0.84 |
-| **EfficientNetB0 — Fine-Tuned** | **87.18%** | **0.80** | **0.90** | **0.85** |
+### EfficientNet preprocessing detail
 
-The results show a clear improvement as the models move from handcrafted features toward learned image representations.
+EfficientNetB0 already contains input rescaling as part of the model.
 
-The **fine-tuned EfficientNetB0 achieved the best overall performance**, reaching **87.18% test accuracy** and a **macro F1-score of 0.85**.
+For this reason, the EfficientNet data generator does **not** apply:
 
-For pneumonia detection specifically, the fine-tuned model achieved a **recall of 0.97**, correctly identifying the large majority of pneumonia cases in the test set.
+```python
+rescale=1./255
+```
 
----
-
-## Three-Class Classification
-
-An additional experiment extends the problem to:
-
-- Normal
-- Bacterial Pneumonia
-- Viral Pneumonia
-
-A fine-tuned EfficientNetB0 model achieved:
-
-**Test Accuracy: 80.61%**
-
-| Class | Precision | Recall | F1-score |
-|---|---:|---:|---:|
-| Bacterial Pneumonia | 0.80 | 0.87 | 0.84 |
-| Normal | 0.82 | 0.82 | 0.82 |
-| Viral Pneumonia | 0.78 | 0.68 | 0.73 |
-
-The results indicate that the model can distinguish pneumonia subtypes to a meaningful extent, although **Viral Pneumonia remains the most challenging class**.
+Applying both would rescale the images twice and silently degrade model performance. A separate generator is therefore used for the EfficientNet experiments.
 
 ---
 
-## Key Findings
+## Data Augmentation
 
-- Classical models based on HOG and GLCM features provide a useful baseline but struggle particularly with Normal X-rays.
-- The custom CNN improves substantially over handcrafted feature approaches.
-- Transfer learning with EfficientNetB0 produces the strongest results.
-- Fine-tuning further improves the pretrained model, achieving the highest binary classification accuracy and macro F1-score.
-- The three-class experiment demonstrates that learned image representations can also capture differences between bacterial and viral pneumonia, although subtype classification remains more difficult than binary pneumonia detection.
+The training data uses moderate augmentation:
+
+- rotation: ±10°
+- zoom: 0.10
+- width/height shifts: 0.05
+- horizontal flip
+
+The transformations were deliberately kept small to avoid introducing unrealistic geometric distortions into medical images.
 
 ---
 
-## Technologies
+## Limitations
+
+- The dataset is strongly imbalanced toward pneumonia, and the final model still shows a bias toward predicting the positive class.
+- No decision-threshold optimization was performed; binary predictions use the standard 0.5 threshold.
+- Each model was evaluated from a single training run without cross-validation or seed averaging.
+- Small differences, such as frozen versus fine-tuned EfficientNetB0, were therefore not tested for statistical significance.
+- Horizontal flipping may not be appropriate for applications where anatomical laterality is important.
+- Differences between the dataset splits limit how directly validation performance can be used to estimate test performance.
+- The three-class experiment is substantially harder because bacterial and viral pneumonia have overlapping visual characteristics.
+- This project is an experimental comparison of machine learning methods on a public dataset and is **not intended for clinical diagnosis**.
+
+---
+
+## Tech Stack
 
 - Python
 - NumPy
-- Pandas
+- pandas
 - OpenCV
 - scikit-image
 - scikit-learn
 - TensorFlow / Keras
-- EfficientNetB0
 - Matplotlib
+- EfficientNetB0
 
 ---
 
-## Repository Structure
+## Running the Project
+
+Repository structure:
 
 ```text
 chest-xray-pneumonia-classification/
-│
 ├── chest_xray_pneumonia_classification.ipynb
 ├── README.md
 ├── .gitignore
 └── LICENSE
 ```
 
-The dataset is downloaded directly from Kaggle and is therefore not included in the repository.
+The notebook can run in Google Colab or another Python environment with the required dependencies installed.
 
----
+The dataset is not stored in this repository.
 
-## Running the Notebook
-
-The notebook can be executed in **Google Colab** or another Python environment with the required dependencies installed.
-
-Kaggle API credentials must be configured before downloading the dataset.
-
-The dataset is downloaded using:
+With Kaggle API credentials configured, it can be downloaded using:
 
 ```bash
 kaggle datasets download -d paultimothymooney/chest-xray-pneumonia
 ```
 
-After extraction, the notebook performs dataset preparation, preprocessing, feature extraction, model training, and evaluation.
-
 ---
+
 ## Author
 
 **Anna Allagioti**  
 
+---
 
 ## License
 
-This project is licensed under the MIT License.
+MIT
