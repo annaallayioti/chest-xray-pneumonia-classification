@@ -4,6 +4,8 @@ Detecting pneumonia from chest X-rays by comparing handcrafted image features wi
 
 The project also includes a three-class experiment separating bacterial and viral pneumonia.
 
+MSc coursework — Image Analysis and Processing, National and Kapodistrian University of Athens, 2026.
+
 ---
 
 ## Results
@@ -19,6 +21,14 @@ All models were evaluated on the same held-out test set of 624 images.
 | EfficientNetB0 — fine-tuned | **87.18%** | **0.80** | **0.90** | **0.85** |
 
 The ranking is fairly clear, but the distribution of errors is more interesting than accuracy alone.
+
+### From handcrafted features to transfer learning
+
+The confusion matrices show the main change between the classical and deep learning approaches. Random Forest correctly identifies almost all pneumonia cases, but heavily over-predicts pneumonia in Normal X-rays. EfficientNetB0 substantially reduces these false positives while maintaining high pneumonia recall.
+
+| Random Forest | Fine-Tuned EfficientNetB0 |
+|---|---|
+| ![Random Forest Confusion Matrix](images/random_forest_confusion_matrix.png) | ![Fine-Tuned EfficientNetB0 Confusion Matrix](images/efficientnet_finetuned_confusion_matrix.png) |
 
 ### Classical ML
 
@@ -77,11 +87,15 @@ Normal images remain more clearly separable, while distinguishing bacterial from
 
 Fine-tuning produced only a small improvement on this experiment, with validation accuracy remaining around 72% before and after unfreezing. This suggests that the pretrained features were already capturing much of the useful visual information available for this task.
 
+### Confusion Matrix
+
+![Three-Class Confusion Matrix](images/efficientnet_3class_confusion_matrix.png)
+
 ---
 
 ## Dataset
 
-The project uses the Kaggle **Chest X-Ray Images (Pneumonia)** dataset containing 5,856 images.
+The project uses the [Chest X-Ray Images (Pneumonia)](https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia) dataset containing 5,856 images.
 
 Original dataset split:
 
@@ -123,8 +137,6 @@ CLAHE uses a `clipLimit` of 2.0 with 8×8 tiles.
 
 It was preferred over global histogram equalization because chest X-rays can have substantial local exposure differences. Local contrast enhancement helps emphasize structures within the lung fields without applying the same transformation uniformly across the entire image.
 
----
-
 ### Handcrafted Features
 
 Two types of features were extracted for the classical ML models.
@@ -148,8 +160,6 @@ Two types of features were extracted for the classical ML models.
 Combining HOG and GLCM provides both structural and textural information from the X-rays.
 
 Features were standardized using `StandardScaler`, fitted only on the training data.
-
----
 
 ### Custom CNN
 
@@ -182,8 +192,6 @@ Global Average Pooling was used instead of flattening the complete feature maps 
 The model was trained with Adam using a learning rate of `1e-4`.
 
 The architecture was intentionally kept relatively small, since the goal was to compare learned representations with the handcrafted HOG + GLCM pipeline rather than build a heavily optimized CNN.
-
----
 
 ### EfficientNetB0
 
@@ -248,15 +256,7 @@ The transformations were deliberately kept small to avoid introducing unrealisti
 
 ## Tech Stack
 
-- Python
-- NumPy
-- pandas
-- OpenCV
-- scikit-image
-- scikit-learn
-- TensorFlow / Keras
-- Matplotlib
-- EfficientNetB0
+Python · NumPy · pandas · OpenCV · scikit-image · scikit-learn · TensorFlow/Keras · Matplotlib · EfficientNetB0
 
 ---
 
@@ -266,6 +266,10 @@ Repository structure:
 
 ```text
 chest-xray-pneumonia-classification/
+├── images/
+│   ├── random_forest_confusion_matrix.png
+│   ├── efficientnet_finetuned_confusion_matrix.png
+│   └── efficientnet_3class_confusion_matrix.png
 ├── chest_xray_pneumonia_classification.ipynb
 ├── README.md
 ├── .gitignore
@@ -286,7 +290,10 @@ kaggle datasets download -d paultimothymooney/chest-xray-pneumonia
 
 ## Author
 
-**Anna Allagioti**  
+**Anna Allagioti**
+
+MSc in Data Science and Information Technologies  
+National and Kapodistrian University of Athens
 
 ---
 
